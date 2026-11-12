@@ -10,38 +10,68 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <title>Biblioteca Básica</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 24px auto; padding: 0 16px; background: #f5f5f5; color: #222; }
-  h1 { text-align: center; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  header { background: #4f46e5; color: #fff; padding: 16px; text-align: center; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 14px; opacity: .9; }
+  .container { display: flex; max-width: 1000px; margin: 16px auto; gap: 16px; padding: 0 12px; align-items: flex-start; }
+  aside { width: 170px; flex-shrink: 0; background: #fff; border-radius: 10px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.1); display: flex; flex-direction: column; gap: 4px; max-height: 80vh; overflow-y: auto; }
+  aside h2 { font-size: 13px; color: #666; margin: 8px 8px 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .aba { text-align: left; background: transparent; color: #333; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; border: 0; }
+  .aba:hover { background: #eef2ff; }
+  .aba.ativa { background: #4f46e5; color: #fff; }
+  .aba small { display: block; font-size: 12px; opacity: .75; }
+  main { flex: 1; min-width: 0; }
   form, .book { background: #fff; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-  input { padding: 8px; margin: 4px 0; border: 1px solid #ccc; border-radius: 6px; }
+  input { padding: 8px; margin: 4px 0; border: 1px solid #ccc; border-radius: 6px; max-width: 100%; }
   button { padding: 8px 12px; border: 0; border-radius: 6px; background: #4f46e5; color: #fff; cursor: pointer; }
   button.danger { background: #dc2626; }
   .bar { height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin: 8px 0; }
   .fill { height: 100%; background: #22c55e; transition: width .3s; }
-  .done { opacity: .75; }
+  .done { opacity: .85; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
   .datas { font-size: 14px; color: #555; margin-top: 6px; }
   label { font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+  .vazio { color: #777; text-align: center; padding: 24px; background: #fff; border-radius: 10px; }
+  @media (max-width: 600px) {
+    .container { flex-direction: column; }
+    aside { width: 100%; flex-direction: row; overflow-x: auto; max-height: none; }
+    aside h2 { display: none; }
+    .aba { white-space: nowrap; }
+  }
 </style>
 </head>
 <body>
-<h1>Biblioteca Básica</h1>
-<p id="resumo"></p>
+<header>
+  <h1>Biblioteca Básica</h1>
+  <p id="resumo"></p>
+</header>
 
-<form id="form">
-  <input id="titulo" placeholder="Título do livro" required>
-  <input id="autor" placeholder="Autor (opcional)">
-  <input id="total" type="number" min="1" placeholder="Número total de páginas" required>
-  <label>Data de início (opcional)
-    <input id="inicio" type="date">
-  </label>
-  <button>Adicionar livro</button>
-</form>
+<div class="container">
+  <aside id="abas"></aside>
 
-<div id="lista"></div>
+  <main>
+    <form id="form">
+      <input id="titulo" placeholder="Título do livro" required>
+      <input id="autor" placeholder="Autor (opcional)">
+      <input id="total" type="number" min="1" placeholder="Número total de páginas" required>
+      <label>Data de início (opcional)
+        <input id="inicio" type="date">
+      </label>
+      <button>Adicionar livro</button>
+    </form>
+
+    <div id="lista"></div>
+  </main>
+</div>
 
 <script>
   let livros = JSON.parse(localStorage.getItem('bibliotecaBasica')) || [];
+  let abaAtiva = 'andamento';
+
+  const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -62,11 +92,62 @@
     return d.innerHTML;
   }
 
+  // Chave da aba: "andamento" ou "AAAA-MM" pela data de fim
+  function chaveDoLivro(l) {
+    if (!l.lido || !l.fim) return 'andamento';
+    return l.fim.slice(0, 7);
+  }
+
+  function nomeDaAba(chave) {
+    if (chave === 'andamento') return 'Em andamento';
+    const [a, m] = chave.split('-');
+    return `${MESES[parseInt(m, 10) - 1]} de ${a}`;
+  }
+
+  function montarAbas() {
+    const chaves = new Set(livros.map(chaveDoLivro));
+    chaves.add('andamento');
+
+    const lidos = [...chaves]
+      .filter(c => c !== 'andamento')
+      .sort()
+      .reverse();
+
+    return ['andamento', ...lidos];
+  }
+
+  function renderAbas(chaves) {
+    const aside = document.getElementById('abas');
+    aside.innerHTML = '<h2>Leituras</h2>';
+
+    chaves.forEach(chave => {
+      const qtd = livros.filter(l => chaveDoLivro(l) === chave).length;
+      const btn = document.createElement('button');
+      btn.className = 'aba' + (chave === abaAtiva ? ' ativa' : '');
+      btn.innerHTML = `${nomeDaAba(chave)} <small>${qtd} livro(s)</small>`;
+      btn.onclick = () => { abaAtiva = chave; render(); };
+      aside.appendChild(btn);
+    });
+  }
+
   function render() {
+    const chaves = montarAbas();
+    if (!chaves.includes(abaAtiva)) abaAtiva = chaves[0];
+
+    renderAbas(chaves);
+
     const lista = document.getElementById('lista');
     lista.innerHTML = '';
 
-    livros.forEach((l, i) => {
+    const indices = livros
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => chaveDoLivro(l) === abaAtiva);
+
+    if (indices.length === 0) {
+      lista.innerHTML = '<div class="vazio">Nenhum livro nesta aba.</div>';
+    }
+
+    indices.forEach(({ l, i }) => {
       const pct = Math.min(100, Math.round((l.atual / l.total) * 100));
       const div = document.createElement('div');
       div.className = 'book' + (l.lido ? ' done' : '');
@@ -117,7 +198,6 @@
     if (isNaN(v) || v < 0) v = 0;
     if (v > l.total) v = l.total;
 
-    // Define a data de início automaticamente na primeira leitura
     if (v > 0 && !l.inicio) l.inicio = hoje();
 
     l.atual = v;
@@ -150,6 +230,11 @@
 
   render();
 </script>
-<script>  if ('serviceWorker' in navigator) {    navigator.serviceWorker.register('./sw.js');  }</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
 </body>
 </html>
